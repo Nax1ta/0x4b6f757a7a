@@ -260,7 +260,8 @@ def main():
     try:
         import webview
         webview.create_window('0x4b6f757a7a', url, width=1120, height=780, min_size=(680, 480), background_color='#ededeb')
-        webview.start()
+        icon = ROOT / 'app.ico'
+        webview.start(icon=str(icon) if icon.is_file() else None)
     except Exception:
         webbrowser.open(url)
         thread.join()

@@ -35,8 +35,8 @@ Different build machines may generate different debug keys; replacing an existin
 installation signed by another key requires uninstalling it (which clears local
 settings). No signing secrets, GitHub tokens or SMTP credentials belong in assets.
 
-The `package` workflow builds and verifies the APK on Ubuntu and uploads the
-`0x4b6f757a7a-android-debug-signed` artifact. Desktop jobs are maintained separately.
+Application packages are built locally. No workflow publishes or uploads them.
+Optional personal icons are loaded from `.local/icons/android`, outside Git.
 
 ## Frontend bridge contract
 
