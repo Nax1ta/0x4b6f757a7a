@@ -1,0 +1,56 @@
+plugins { id 'com.android.application' }
+
+def clientRoot = rootProject.file('../client')
+def clientAssets = layout.buildDirectory.dir('generated/clientAssets')
+def assetPolicy = "default-src 'none'; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: https: data:; font-src 'self' file: data:; connect-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+def syncClient = tasks.register('syncClientAssets', Sync) {
+    inputs.property('assetPolicy', assetPolicy)
+    from(clientRoot)
+    into(clientAssets.map { it.dir('client') })
+    exclude '**/node_modules/**', '**/.*/**', '**/*.map', '**/.env*'
+    doFirst {
+        if (!new File(clientRoot, 'index.html').isFile()) {
+            throw new GradleException('Missing client/index.html. The shared frontend must be present before packaging.')
+        }
+    }
+    doLast {
+        // android_asset URLs may bypass shouldInterceptRequest. Put CSP into
+        // the generated HTML itself, before scripts, without changing client/.
+        fileTree(clientAssets.get().asFile).matching { include '**/*.html' }.each { html ->
+            String source = html.getText('UTF-8')
+            if (!(source =~ /(?i)<head(?:\s[^>]*)?>/).find()) {
+                throw new GradleException("HTML asset needs a head element for CSP: ${html.name}")
+            }
+            String meta = '<meta http-equiv="Content-Security-Policy" content="' + assetPolicy + '">'
+            html.setText(source.replaceFirst(/(?i)(<head(?:\s[^>]*)?>)/, '$1' + java.util.regex.Matcher.quoteReplacement(meta)), 'UTF-8')
+        }
+    }
+}
+
+android {
+    namespace 'dev.kouzz.console'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    defaultConfig {
+        applicationId 'dev.kouzz.console'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets.main.assets.srcDir(clientAssets)
+    buildTypes {
+        debug { debuggable true }
+        // Installable builds use the SDK debug key, including assembleRelease.
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            debuggable false
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn(syncClient) }

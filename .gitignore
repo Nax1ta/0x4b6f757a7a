@@ -5,3 +5,13 @@ __pycache__
 !.vscode/*.example
 !.vscode/*.code-workspace
 .venv/
+.local/
+dist/
+build/
+*.spec
+*.log
+*.apk
+*.exe
+.pytest_cache/
+.env.*.local
+**/client-defaults.json

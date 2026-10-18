@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#eeeeec">
+  <title>0x4b6f757a7a</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <a class="wordmark" href="./index.html">0x4b6f757a7a<span>CONSOLE / 本地查询</span></a>
+      <span class="connection" id="connection">正在连接</span>
+    </header>
+    <main>
+      <div id="fixture-note" class="notice" hidden>截图预览 · 固定数据 · 不会请求或修改后端</div>
+      <div id="network-note" class="notice" hidden>设备处于离线状态，当前显示已获取的数据。</div>
+      <section class="intro">
+        <div><p class="eyebrow">CONSOLE</p><h1>观测面板</h1><p class="subtitle">房间动态与通知任务，一处查看。</p></div>
+        <button id="refresh" class="button primary" type="button">立即检测 <span aria-hidden="true">↗</span></button>
+      </section>
+      <div id="feedback" class="notice" role="status" aria-live="polite" hidden></div>
+      <section class="overview" aria-label="查询概览">
+        <div><span class="label">关注房间</span><strong id="total">—</strong></div>
+        <div><span class="label">正在直播</span><strong id="live-count">—</strong></div>
+        <div><span class="label">最近检测</span><strong class="time-value" id="checked-at">尚未获取</strong></div>
+      </section>
+      <div class="workspace">
+        <section class="watchlist" aria-labelledby="rooms-heading">
+          <div class="section-heading"><h2 id="rooms-heading">房间列表 <span id="room-count" class="muted"></span></h2><span class="eyebrow">LIVE / OFFLINE</span></div>
+          <div id="rooms-message" class="notice" role="status" hidden></div>
+          <div id="rooms" class="room-grid" aria-live="polite" aria-busy="true"><div class="empty">正在获取房间状态…</div></div>
+        </section>
+        <aside>
+          <section class="panel" aria-labelledby="task-heading">
+            <div class="section-heading"><h2 id="task-heading">通知任务</h2><span id="health-badge" class="badge">加载中</span></div>
+            <p class="panel-description">查看 GitHub 云端任务的最近运行情况。</p>
+            <div id="health-message" class="notice" hidden></div>
+            <dl class="details">
+              <div><dt>云端检测</dt><dd id="health-status">正在获取…</dd></div>
+              <div><dt>SMTP 认证</dt><dd id="mail-status">尚未获取</dd></div>
+              <div><dt>最近检查</dt><dd id="health-checked">尚未获取</dd></div>
+              <div><dt>最近邮件</dt><dd id="health-mail">尚未获取</dd></div>
+              <div><dt>待处理通知</dt><dd id="health-pending">—</dd></div>
+              <div><dt>最近运行</dt><dd id="run-status">尚未获取</dd></div>
+              <div><dt>运行时间</dt><dd id="run-created">尚未获取</dd></div>
+              <div><dt>失败次数</dt><dd id="failures">—</dd></div>
+            </dl>
+            <a id="run-link" class="text-link" target="_blank" rel="noopener noreferrer" hidden>查看 GitHub 运行记录 ↗</a>
+            <p class="hint">云端数据超过 15 分钟视为过期。邮件 accepted 仅表示邮件服务器已接受，不代表收件箱已送达。</p>
+          </section>
+          <section class="panel" aria-labelledby="settings-heading">
+            <div class="section-heading"><h2 id="settings-heading">关注设置</h2><span class="eyebrow">CONFIG</span></div>
+            <div id="settings-message" class="notice" hidden></div>
+            <p class="panel-description">关注设置仅作用于本地客户端，不会修改云端 ENV_FILE。云端邮件通知名单需在云端另行配置。</p>
+            <form id="room-form">
+              <label for="room-id">房间 ID</label><input id="room-id" name="id" inputmode="numeric" pattern="[0-9]+" maxlength="20" autocomplete="off" placeholder="例如 123456" required disabled>
+              <label for="room-name">备注名称 <span class="muted">可选</span></label><input id="room-name" name="name" maxlength="80" autocomplete="off" placeholder="给这个房间一个名字" disabled>
+              <button class="button full" id="add-room" type="submit" disabled>＋ 添加房间</button>
+            </form>
+            <div class="divider"></div>
+            <form id="repo-form">
+              <label for="repository">GitHub 仓库</label><input id="repository" name="repository" maxlength="201" placeholder="owner/repository" autocomplete="off" spellcheck="false" required disabled>
+              <p class="hint">填写 owner/repository，用于查询公共仓库任务。最多关注 30 个房间。</p>
+              <button class="button full" id="save-repo" type="submit" disabled>保存仓库</button>
+            </form>
+          </section>
+        </aside>
+      </div>
+    </main>
+    <footer><span>0x4b6f757a7a</span><span>本地查询 · 每 60 秒更新 · 时间为设备本地时区</span><button id="reload" type="button" class="text-link">重新连接</button></footer>
+  </div>
+</body>
+</html>

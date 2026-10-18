@@ -1,0 +1,7 @@
+.gradle/
+.tools/
+**/build/
+local.properties
+*.jks
+*.keystore
+app/src/main/assets/client-defaults.json

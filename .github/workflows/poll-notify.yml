@@ -1,73 +1,94 @@
-name: bilibili-live-poll-notify
+name: orbit
 
 on:
   schedule:
-    # 每 5 分钟检查一次直播间状态（双保险之一；即使失效，自续链也能维持运转）
-    - cron: "*/5 * * * *"
+    - cron: '2-59/5 * * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['engine.py', 'delivery.py', 'poll_notify.py', 'cloud.py', '.github/workflows/poll-notify.yml']
 
 permissions:
   contents: write
   actions: write
 
 concurrency:
-  group: poll-notify
+  group: orbit
   cancel-in-progress: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
     env:
-      PYTHONUNBUFFERED: "1"
+      PYTHONUNBUFFERED: '1'
+      PYTHONPATH: '.'
+      STATE_ENCRYPTED: '1'
+      STATE_PATH: '.local/state.enc'
+      STATE_KEY: ${{ secrets.STATE_KEY }}
+      CLOUD_CHECKPOINT: '1'
+      GITHUB_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: 安装依赖
-        run: pip install -r requirements.txt
-
-      - name: 写入配置
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-worker.txt
+      - name: Prepare
+        run: pip install -r requirements-worker.txt
+      - name: Configure
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
-        run: printf '%s\n' "$ENV_FILE" > .env
-
-      - name: 轮询检测（开播则发邮件）
-        run: python poll_notify.py
-
-      - name: 保存监控状态
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state.json
-          if git diff --cached --quiet; then
-            echo "状态无变化，无需提交"
-          else
-            git commit -m "chore: 更新监控状态"
-            git push
-          fi
+          test -n "$ENV_FILE" || { echo 'Missing ENV_FILE'; exit 1; }
+          umask 077
+          printf '%s\n' "$ENV_FILE" > .env
+      - name: Restore
+        id: restore
+        run: python cloud.py pull
+      - name: Gate
+        id: gate
+        run: python scripts/gate.py
+      - name: Check
+        id: observe
+        if: steps.gate.outputs.proceed == 'true'
+        run: python poll_notify.py
+      - name: Persist
+        if: always() && steps.restore.outcome == 'success' && steps.gate.outputs.proceed == 'true'
+        run: python cloud.py push
+      - name: Recovery
+        if: always() && steps.restore.outcome == 'success' && hashFiles('.local/state.enc') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-v2
+          path: .local/state.enc
+          include-hidden-files: true
+          retention-days: 7
+      - name: Clean
+        if: always()
+        run: rm -f .env
 
-  # 自续链：无论检查成功与否，约 5 分钟后调度下一轮。
-  # workflow_dispatch 已被手动触发反复验证可用，因此本链条不依赖 schedule 定时器。
-  self_trigger:
+  continuation:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
     needs: check
-    if: always()
+    if: always() && !cancelled() && (needs.check.outputs.proceed == 'true' || needs.check.result == 'failure')
     steps:
-      - name: 等待约 5 分钟后调度下一轮
+      - name: Continue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           sleep 240
-          for i in 1 2 3; do
+          for attempt in 1 2 3; do
             if gh workflow run poll-notify.yml --repo "$GITHUB_REPOSITORY" --ref main; then
-              echo "✅ 已调度下一轮（自续链运转中）"
+              echo 'Continuation queued'
               exit 0
             fi
-            echo "调度失败，10 秒后重试 ($i/3)"
             sleep 10
           done
-          echo "❌ 连续调度失败，请检查仓库 Actions 权限（需 actions: write）"
+          echo 'Continuation unavailable; schedule remains enabled'
           exit 1

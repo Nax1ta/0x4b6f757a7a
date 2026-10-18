@@ -1,3 +1,2 @@
-https://github.com/NateScarlet/bilibili-api/archive/49b47197adb29f5ae9a974f090165dfe69ed0bba.tar.gz
-JinJa2==3.0.1
-aiohttp==3.12.15
+cryptography>=44,<47
+Pillow>=11,<13

@@ -1,0 +1,102 @@
+name: package
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'client/**'
+      - 'scripts/build_android*'
+      - '.github/workflows/package.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android platform and build tools
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Bundle local preferences
+        if: github.event_name != 'pull_request'
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          umask 077
+          printf '%s\n' "$ENV_FILE" > .env
+          python scripts/bootstrap.py
+          rm -f .env
+      - name: Build installable APK (debug signing)
+        run: sh scripts/build_android.sh release
+      - name: Verify APK signature
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk"
+      - name: Upload APK (debug signed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 0x4b6f757a7a-android-debug-signed
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+      - run: pip install -r requirements-desktop.txt
+      - name: Bundle local preferences
+        if: github.event_name != 'pull_request'
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          umask 077
+          printf '%s\n' "$ENV_FILE" > .env
+          python scripts/bootstrap.py
+          rm -f .env
+      - run: python scripts/package_desktop.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/0x4b6f757a7a.exe
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp packages/0x4b6f757a7a-android-debug-signed/app-release.apk 0x4b6f757a7a-android.apk
+          cp packages/windows/0x4b6f757a7a.exe 0x4b6f757a7a-windows.exe
+          sha256sum 0x4b6f757a7a-android.apk 0x4b6f757a7a-windows.exe > SHA256SUMS.txt
+          gh release view v2.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create v2.0.0 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title '0x4b6f757a7a · 02' --notes 'Windows / Android. Android package uses an SDK debug signing key for personal installation.'
+          gh release upload v2.0.0 0x4b6f757a7a-android.apk 0x4b6f757a7a-windows.exe SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+
