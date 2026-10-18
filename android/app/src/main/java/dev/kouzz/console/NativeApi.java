@@ -392,7 +392,13 @@ final class NativeApi {
     }
 
     private static JSONObject getJson(String address, String accept) throws Exception {
+        boolean github = address.startsWith("https://api.github.com/");
+        if (github) address += (address.contains("?") ? "&" : "?") + "_ts=" + System.currentTimeMillis();
         HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
+        if (github) {
+            connection.setUseCaches(false);
+            connection.setRequestProperty("Cache-Control", "no-cache");
+        }
         connection.setConnectTimeout(4000);
         connection.setReadTimeout(4000);
         connection.setInstanceFollowRedirects(false);

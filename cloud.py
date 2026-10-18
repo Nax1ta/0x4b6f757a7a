@@ -26,6 +26,8 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
 
 def api(path, method='GET', body=None, raw=False):
     token = os.environ['GITHUB_TOKEN']
+    if method == 'GET':
+        path += ('&' if '?' in path else '?') + '_ts=' + str(time.time_ns())
     req = urllib.request.Request(BASE + os.environ['GITHUB_REPOSITORY'] + path,
         data=json.dumps(body).encode() if body is not None else None, method=method,
         headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',

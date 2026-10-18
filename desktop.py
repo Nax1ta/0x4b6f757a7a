@@ -91,7 +91,8 @@ def health():
             return cached[1]
     try:
         def get(url, accept='application/vnd.github+json'):
-            req = urllib.request.Request(url, headers={'User-Agent': 'orbit-console', 'Accept': accept})
+            url += ('&' if '?' in url else '?') + '_ts=' + str(time.time_ns())
+            req = urllib.request.Request(url, headers={'User-Agent': 'orbit-console', 'Accept': accept, 'Cache-Control': 'no-cache'})
             with urllib.request.urlopen(req, timeout=8) as resp:
                 return json.load(resp)
         base = 'https://api.github.com/repos/' + repo

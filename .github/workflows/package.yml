@@ -47,7 +47,15 @@ jobs:
           python scripts/bootstrap.py
           rm -f .env
       - name: Build installable APK (debug signing)
-        run: sh scripts/build_android.sh release
+        env:
+          SIGNING_STORE: ${{ secrets.ANDROID_SIGNING_STORE }}
+        run: |
+          if [ -n "$SIGNING_STORE" ]; then
+            mkdir -p "$HOME/.android"
+            umask 077
+            printf '%s' "$SIGNING_STORE" | base64 --decode > "$HOME/.android/debug.keystore"
+          fi
+          sh scripts/build_android.sh release
       - name: Verify APK signature
         run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk"
       - name: Upload APK (debug signed)
