@@ -29,6 +29,7 @@ final class NativeApi {
     private final Object refreshLock = new Object();
     private final Object healthLock = new Object();
     private final java.util.LinkedHashMap<String, RunSnapshot> runsCache = new java.util.LinkedHashMap<>(8, 0.75f, true);
+    private final java.util.LinkedHashMap<String, RunSnapshot> healthCache = new java.util.LinkedHashMap<>(8, 0.75f, true);
     private JSONObject settings;
     private JSONObject observations;
 
@@ -289,6 +290,23 @@ final class NativeApi {
     private JSONObject health() throws Exception {
         JSONObject config;
         synchronized (lock) { config = copy(settings); }
+        synchronized (healthLock) {
+            String key = config.getString("repository").toLowerCase(java.util.Locale.ROOT) + "/" + config.getString("workflow");
+            RunSnapshot cached = healthCache.get(key);
+            if (cached == null || System.nanoTime() - cached.at >= java.util.concurrent.TimeUnit.SECONDS.toNanos(180)) {
+                cached = new RunSnapshot(fetchHealth(config), null);
+                healthCache.put(key, cached);
+                if (healthCache.size() > 8) healthCache.remove(healthCache.keySet().iterator().next());
+            }
+            JSONObject result = copy(cached.data);
+            // A cached heartbeat may cross the freshness boundary before its cache expires.
+            if (!result.isNull("last_checked_at") && age(result.optString("last_checked_at")) > 900)
+                result.put("stale", true).put("status", "stale");
+            return result;
+        }
+    }
+
+    private JSONObject fetchHealth(JSONObject config) throws Exception {
         String repo = config.getString("repository");
         JSONObject result = new JSONObject().put("repository", repo).put("checked_at", now())
                 .put("source", "github_public_api").put("mail_available", false)
@@ -299,7 +317,14 @@ final class NativeApi {
                 .put("delivery_note", "accepted 表示发件服务器接受，不代表已进入收件箱");
         String heartbeatError = null;
         try {
-            JSONObject heartbeat = getJson("https://raw.githubusercontent.com/" + repo + "/orbit-state/health.json");
+            JSONObject heartbeat = getJson("https://api.github.com/repos/" + repo + "/contents/health.json?ref=orbit-state",
+                    "application/vnd.github.raw+json");
+            if (heartbeat.has("content")) {
+                if (!"base64".equalsIgnoreCase(heartbeat.optString("encoding", "base64")) || !(heartbeat.opt("content") instanceof String))
+                    throw new IllegalStateException("不支持的 GitHub Contents 编码");
+                byte[] decoded = java.util.Base64.getDecoder().decode(heartbeat.getString("content").replaceAll("\\s", ""));
+                heartbeat = new JSONObject(new String(decoded, java.nio.charset.StandardCharsets.UTF_8));
+            }
             String checked = heartbeat.optString("checked_at", "");
             boolean stale = age(checked) > 900;
             String reported = heartbeat.optString("status", "unknown");
@@ -348,7 +373,7 @@ final class NativeApi {
         synchronized (healthLock) {
             String key = repo.toLowerCase(java.util.Locale.ROOT) + "/" + workflow;
             RunSnapshot cached = runsCache.get(key);
-            if (cached != null && System.nanoTime() - cached.at < java.util.concurrent.TimeUnit.SECONDS.toNanos(300)) return cached;
+            if (cached != null && System.nanoTime() - cached.at < java.util.concurrent.TimeUnit.SECONDS.toNanos(600)) return cached;
             RunSnapshot current;
             try {
                 current = new RunSnapshot(getJson("https://api.github.com/repos/" + repo + "/actions/workflows/" + workflow + "/runs?per_page=15"), null);
@@ -363,12 +388,16 @@ final class NativeApi {
     }
 
     private static JSONObject getJson(String address) throws Exception {
+        return getJson(address, "application/json");
+    }
+
+    private static JSONObject getJson(String address, String accept) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
         connection.setConnectTimeout(4000);
         connection.setReadTimeout(4000);
         connection.setInstanceFollowRedirects(false);
         connection.setRequestProperty("User-Agent", "Mozilla/5.0 KouzzConsole/1.0");
-        connection.setRequestProperty("Accept", "application/json");
+        connection.setRequestProperty("Accept", accept);
         if (address.startsWith("https://api.live.bilibili.com/")) connection.setRequestProperty("Referer", "https://live.bilibili.com/");
         try {
             int status = connection.getResponseCode();

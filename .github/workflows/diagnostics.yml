@@ -25,6 +25,17 @@ jobs:
           ENV_FILE: ${{ secrets.ENV_FILE }}
         run: printf '%s\n' "$ENV_FILE" > .env
       - run: python -m unittest discover -s tests -v
+      - name: Configuration shape
+        run: |
+          python - <<'PY'
+          import os
+          from engine import load_env
+          load_env('.env')
+          print('Room entries:', sum(k.startswith('BILIBILI_ROOM_NAME_') for k in os.environ))
+          print('Sender present:', bool(os.getenv('EMAIL_USER')))
+          print('Credential present:', bool(os.getenv('EMAIL_PASSWORD')))
+          print('Recipients present:', bool(os.getenv('EMAIL_TO')))
+          PY
       - run: python cloud.py pull
       - name: Observe without sending or changing durable state
         run: python poll_notify.py --dry-run

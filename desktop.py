@@ -1,5 +1,6 @@
 """Loopback-only desktop console. No cloud email credentials required."""
 import argparse
+import base64
 import concurrent.futures
 import json
 import mimetypes
@@ -86,16 +87,16 @@ def health():
     repo = cfg['repository']
     with CLOUD_LOCK:
         cached = CLOUD_CACHE.get(repo)
-        if cached and time.time() - cached[0] < 45:
+        if cached and time.time() - cached[0] < 180:
             return cached[1]
     try:
-        def get(url):
-            req = urllib.request.Request(url, headers={'User-Agent': 'orbit-console', 'Accept': 'application/vnd.github+json'})
+        def get(url, accept='application/vnd.github+json'):
+            req = urllib.request.Request(url, headers={'User-Agent': 'orbit-console', 'Accept': accept})
             with urllib.request.urlopen(req, timeout=8) as resp:
                 return json.load(resp)
         base = 'https://api.github.com/repos/' + repo
         cached_runs = RUN_CACHE.get(repo)
-        if cached_runs and time.time() - cached_runs[0] < 300:
+        if cached_runs and time.time() - cached_runs[0] < 600:
             runs = cached_runs[1]
         else:
             runs = get(base + '/actions/workflows/poll-notify.yml/runs?per_page=15')['workflow_runs']
@@ -103,7 +104,9 @@ def health():
         heartbeat = {}
         heartbeat_error = None
         try:
-            heartbeat = get('https://raw.githubusercontent.com/' + repo + '/orbit-state/health.json')
+            heartbeat = get(base + '/contents/health.json?ref=orbit-state', 'application/vnd.github.raw+json')
+            if 'content' in heartbeat:
+                heartbeat = json.loads(base64.b64decode(heartbeat['content']))
         except Exception as exc:
             heartbeat_error = '尚未取得云端心跳：' + type(exc).__name__
         latest = runs[0] if runs else None

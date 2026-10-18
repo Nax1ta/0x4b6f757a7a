@@ -24,9 +24,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - name: Install Android platform and build tools
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        run: |
+          manager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$manager"
+          if [ ! -d "$ANDROID_HOME/platforms/android-35" ] || [ ! -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
+            "$manager" 'platforms;android-35' 'build-tools;35.0.0'
+          fi
       - uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
