@@ -128,6 +128,16 @@ class Persistence(unittest.TestCase):
         self.assertEqual(state['outbox'], {})
         self.assertEqual(engine.pending_recipients(state['rooms']['1'], ['a@example.com']), [])
 
+    def test_session_and_queue_promotion_are_checkpointed_atomically(self):
+        with patch('poll_notify.load_env'), patch('poll_notify.observe', return_value=[observation(started=None)]), patch('delivery.send', side_effect=RuntimeError('temporary')):
+            poll_notify.run(False, self.path, False)
+        original = poll_notify.checkpoint
+        def inspect(store, state, remote=False):
+            self.assertLessEqual(len(state['outbox']), 1)
+            return original(store, state, remote)
+        with patch('poll_notify.load_env'), patch('poll_notify.observe', return_value=[observation()]), patch('delivery.send', return_value={'result': 'accepted'}), patch('poll_notify.checkpoint', side_effect=inspect):
+            poll_notify.run(False, self.path, False)
+
     def test_old_queue_is_retried_after_permission_is_restored(self):
         with patch('poll_notify.load_env'), patch('poll_notify.observe', return_value=[observation()]), patch('delivery.send', side_effect=RuntimeError('temporary')):
             poll_notify.run(False, self.path, False)

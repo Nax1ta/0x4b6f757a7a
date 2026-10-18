@@ -63,8 +63,6 @@ def run(dry_run=False, state_path=None, encrypted=None):
             errors.append('room:' + str(index))
             print('R%02d observation=unavailable' % index, flush=True)
             continue
-        if not dry_run:
-            checkpoint(store, state)
         try:
             pending = pending_recipients(updated, delivery.recipients(rid))
         except ValueError:
@@ -77,8 +75,6 @@ def run(dry_run=False, state_path=None, encrypted=None):
                 continue
             key = hashlib.sha256((rid + updated['session'] + recipient.casefold()).encode()).hexdigest()
             outbox.setdefault(key, {'room': dict(updated), 'recipient': recipient, 'created': time.time()})
-        if not dry_run:
-            checkpoint(store, state)
     # Merge observed-time queues when the API later supplies the actual start time.
     for key, item in list(outbox.items()):
         current = state['rooms'].get(item['room']['id'], {})
